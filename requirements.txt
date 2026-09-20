@@ -1,3 +1,4 @@
 streamlit
+pykrx
 yfinance
 pandas
