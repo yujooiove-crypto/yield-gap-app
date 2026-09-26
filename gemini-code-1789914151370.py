@@ -26,7 +26,6 @@ with st.sidebar:
 # 모드 1: 종목별 재무 · 일드갭 진단기
 # =========================================================================
 if app_mode == "🏢 종목별 재무·일드갭 진단":
-    # 마스터 종목 사전
     MASTER_STOCKS = {
         "005930": "삼성전자", "005935": "삼성전자우", "000660": "SK하이닉스", "042700": "한미반도체",
         "403870": "HPSP", "058470": "리노공업", "000990": "DB하이텍", "039030": "이오테크닉스",
@@ -217,8 +216,147 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
 # =========================================================================
 else:
     st.title("🌍 한·미 주요 경제지표 대시보드")
-    st.caption("글로벌 거시경제 핵심 지표(환율·금리·원자재·증시·리스크) 실시간 동향 및 시황 해설")
+    st.caption("글로벌 거시경제 핵심 지표(물가·성장률·기준금리차·환율·금리·원자재·공포지수) 종합 진단")
 
+    # -------------------------------------------------------------
+    # 1. 물가(인플레이션) & 경제성장률 (CPI · PCE · PPI · GDP)
+    # -------------------------------------------------------------
+    st.markdown("### 📊 핵심 인플레이션 & 경제 성장률 (한·미 비교)")
+    st.caption("연준(Fed)과 한국은행(BOK) 통화정책의 핵심 잣대가 되는 4대 거시 펀더멘털 지표")
+
+    with st.expander("⚙️ 물가 및 성장률 수치 직접 조정 (최신 공시 발표치 갱신)", expanded=False):
+        c_i1, c_i2 = st.columns(2)
+        with c_i1:
+            us_cpi = st.number_input("🇺🇸 미국 CPI (소비자물가, 전년비 %)", value=2.7, step=0.1, format="%.1f")
+            us_pce = st.number_input("🇺🇸 미국 Core PCE (개인소비지출, 전년비 %)", value=2.6, step=0.1, format="%.1f")
+            us_ppi = st.number_input("🇺🇸 미국 PPI (생산자물가, 전년비 %)", value=2.4, step=0.1, format="%.1f")
+            us_gdp = st.number_input("🇺🇸 미국 실질 GDP 성장률 (전기대비 연율 %)", value=2.8, step=0.1, format="%.1f")
+        with c_i2:
+            kr_cpi = st.number_input("🇰🇷 한국 CPI (소비자물가, 전년비 %)", value=2.2, step=0.1, format="%.1f")
+            kr_ppi = st.number_input("🇰🇷 한국 PPI (생산자물가, 전년비 %)", value=1.8, step=0.1, format="%.1f")
+            kr_gdp = st.number_input("🇰🇷 한국 실질 GDP 성장률 (전년비 %)", value=2.3, step=0.1, format="%.1f")
+
+    # 기본값 변수 할당 보장
+    if "us_cpi" not in locals():
+        us_cpi, us_pce, us_ppi, us_gdp = 2.7, 2.6, 2.4, 2.8
+        kr_cpi, kr_ppi, kr_gdp = 2.2, 1.8, 2.3
+
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
+    # 1) CPI
+    with m_col1:
+        st.metric(
+            label="소비자물가지수 (CPI)",
+            value=f"🇺🇸 {us_cpi:.1f}%",
+            delta=f"🇰🇷 {kr_cpi:.1f}% (한국)",
+            delta_color="off"
+        )
+        st.caption("장바구니 체감 물가 (목표 2.0%)")
+
+    # 2) PCE
+    with m_col2:
+        pce_diff = round(us_pce - 2.0, 2)
+        st.metric(
+            label="미국 개인소비지출 (Core PCE)",
+            value=f"{us_pce:.1f}%",
+            delta=f"연준 목표대비 {pce_diff:+.1f}%p",
+            delta_color="inverse" if pce_diff > 0 else "normal"
+        )
+        st.caption("연준(Fed) 금리 결정 제1 척도")
+
+    # 3) PPI
+    with m_col3:
+        st.metric(
+            label="생산자물가지수 (PPI)",
+            value=f"🇺🇸 {us_ppi:.1f}%",
+            delta=f"🇰🇷 {kr_ppi:.1f}% (한국)",
+            delta_color="off"
+        )
+        st.caption("도매 원가 (CPI 1~2개월 선행)")
+
+    # 4) GDP
+    with m_col4:
+        st.metric(
+            label="실질 경제성장률 (GDP)",
+            value=f"🇺🇸 {us_gdp:.1f}%",
+            delta=f"🇰🇷 {kr_gdp:.1f}% (한국)",
+            delta_color="normal"
+        )
+        st.caption("국가 경제 성적표 & 경기 체력")
+
+    # 인플레이션 종합 진단 상태창
+    if us_pce <= 2.2:
+        st.success("🟢 **물가 안정 국면 (타깃 2% 수렴)**: 연준의 인플레이션 통제 목표치에 근접하여 기준금리 인하 및 유동성 완화 환경이 우호적입니다.")
+    elif us_pce <= 2.8:
+        st.info("🟡 **물가 둔화(디스인플레이션) 지속 국면**: 물가 하락세가 이어지고 있으나 잔여 인플레 압력으로 금리 인하 속도가 조절될 수 있습니다.")
+    else:
+        st.warning("🟠 **끈적한 물가(Sticky Inflation) 경계**: 물가 압력이 지속되어 긴축적 통화정책(고금리)이 시장 예상보다 장기화될 수 있습니다.")
+
+    with st.expander("📖 CPI · PCE · PPI · GDP의 상호 메커니즘과 주식시장 영향"):
+        st.markdown("""
+        * **1. PPI $\\rightarrow$ CPI $\\rightarrow$ PCE로 이어지는 물가 파이프라인**:
+          * **생산자물가(PPI)**는 기업의 원자재 및 제조 원가이므로 **1~2개월 뒤 소비자물가(CPI)로 전가**됩니다.
+          * **소비자물가(CPI)**가 장바구니 체감 물가라면, **개인소비지출(PCE)**은 가격이 비싸진 품목 대신 대체재를 소비하는 현실적인 가계 패턴을 반영합니다.
+          * **연준이 CPI보다 PCE(특히 식품·에너지를 뺀 근원 Core PCE)를 최우선으로 보는 이유**가 여기에 있습니다.
+        * **2. 물가와 기준금리, 주식 밸류에이션**:
+          * PCE나 CPI가 시장 예상치를 웃돌면 **'금리 인하 지연' 또는 '추가 인상 우려'**로 국채 금리가 오르고, 미래 현금흐름의 할인율이 높아져 **성장주·기술주가 하락 압력**을 받습니다.
+        * **3. GDP(경제성장률)와 경기 국면 판정**:
+          * **골디락스 (GDP 견조 + 물가 안정)**: 주식 시장에 가장 이상적인 상승 환경.
+          * **스태그플레이션 (GDP 둔화 + 물가 고착)**: 기업 실적 악화와 긴축이 겹치는 주식 시장 최악의 시나리오.
+          * **경기 침체 (2개 분기 연속 GDP 마이너스 역성장)**: 전통적 안전자산(국채, 금) 선호 심리 확산.
+        """)
+
+    st.divider()
+
+    # -------------------------------------------------------------
+    # 2. 한·미 중앙은행 기준금리 현황 & 금리 역전차
+    # -------------------------------------------------------------
+    st.markdown("### 🏛️ 한·미 중앙은행 기준금리 현황 & 금리 역전차")
+    
+    with st.expander("⚙️ 기준금리 수치 직접 조정 (통화정책 회의 변경 시 반영)", expanded=False):
+        c_k_in, c_u_in = st.columns(2)
+        with c_k_in:
+            bok_rate = st.number_input("한국은행 기준금리 (%)", value=3.00, step=0.25, format="%.2f")
+        with c_u_in:
+            fed_rate = st.number_input("미국 연준(Fed) 기준금리 상단 (%)", value=4.50, step=0.25, format="%.2f")
+
+    if "bok_rate" not in locals():
+        bok_rate, fed_rate = 3.00, 4.50
+
+    rate_spread = round(bok_rate - fed_rate, 2)
+
+    k_col, u_col, s_col = st.columns(3)
+    k_col.metric("🇰🇷 한국은행 기준금리", f"{bok_rate:.2f}%")
+    u_col.metric("🇺🇸 미국 연준 기준금리 (상단)", f"{fed_rate:.2f}%")
+    s_col.metric(
+        "한·미 금리 격차 (한국 - 미국)",
+        f"{rate_spread:+.2f}%p",
+        delta=f"역전 폭 {abs(rate_spread):.2f}%p" if rate_spread < 0 else "정상 스프레드",
+        delta_color="inverse" if rate_spread < 0 else "normal"
+    )
+
+    if rate_spread < 0:
+        st.error(
+            f"🔴 **금리 역전 국면 (격차 {abs(rate_spread):.2f}%p)**: 미국의 기준금리가 한국보다 높아 글로벌 자금이 달러화 자산으로 쏠리기 쉬운 환경입니다. "
+            "원/달러 환율 상승(원화 약세) 압력과 외국인 자본 유출 위험을 방어하기 위해 한국은행의 통화정책 여력이 제약됩니다."
+        )
+    elif rate_spread == 0:
+        st.info("🟡 **금리 동등 국면**: 한·미 기준금리가 같은 수준으로 환율 변동성 및 자금 유출입 충격이 중립적입니다.")
+    else:
+        st.success(f"🟢 **정상 스프레드 국면 (한국 우위 +{rate_spread:.2f}%p)**: 통상적인 신흥국 금리 프리미엄이 유지되어 외환 시장이 안정적입니다.")
+
+    with st.expander("📖 한·미 금리 역전차가 주식 및 환율에 미치는 영향"):
+        st.markdown("""
+        * **1. 환율과 외국인 수급**: 미국 금리가 높으면 자금이 달러로 이동하여 원화 가치 절하(환율 상승)가 발생하고, 코스피 외국인 순매도세를 자극할 수 있습니다.
+        * **2. 한국은행 통화정책 제약**: 환율 불안 때문에 경기가 둔화되어도 한국은행이 선제적으로 금리를 큰 폭 인하하기 어려워집니다.
+        * **3. 수출 대형주 영향**: 고환율 환경은 수출 제조기업(삼성전자, 현대차)의 원화 환산 매출에는 우호적이나 수입 원자재 비중이 큰 내수기업 마진을 압박합니다.
+        """)
+
+    st.divider()
+
+    # -------------------------------------------------------------
+    # 3. 실시간 거시 금융 지표 (환율·금리·원자재·증시·리스크)
+    # -------------------------------------------------------------
     MACRO_DICT = {
         "환율 & 통화": {
             "원/달러 환율": {"sym": "KRW=X", "unit": "원", "desc": "원화 가치 척도. 상승(원화 약세) 시 외인 자본 유출 압력 가중 및 수입 물가 상승."},
@@ -255,29 +393,25 @@ else:
                         prev = float(hist["Close"].iloc[-2])
                         chg_pct = ((curr - prev) / prev) * 100
                         results[category][name] = {
-                            "current": curr,
-                            "change": chg_pct,
-                            "unit": meta["unit"],
-                            "desc": meta["desc"],
+                            "current": curr, "change": chg_pct,
+                            "unit": meta["unit"], "desc": meta["desc"],
                             "history": hist["Close"]
                         }
                     elif not hist.empty:
                         curr = float(hist["Close"].iloc[-1])
                         results[category][name] = {
-                            "current": curr,
-                            "change": 0.0,
-                            "unit": meta["unit"],
-                            "desc": meta["desc"],
+                            "current": curr, "change": 0.0,
+                            "unit": meta["unit"], "desc": meta["desc"],
                             "history": hist["Close"]
                         }
                 except Exception:
                     pass
         return results
 
-    with st.spinner("글로벌 거시경제 데이터를 집계 중입니다..."):
+    with st.spinner("글로벌 거시경제 실시간 시장 데이터를 집계 중입니다..."):
         macro_data = fetch_macro_series()
 
-    st.markdown("### 📌 부문별 실시간 핵심 지표 현황")
+    st.markdown("### 📌 부문별 실시간 시장 지표 현황")
 
     for cat_name, cat_items in macro_data.items():
         st.subheader(f"📊 {cat_name}")
