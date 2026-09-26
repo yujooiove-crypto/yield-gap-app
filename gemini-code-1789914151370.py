@@ -112,7 +112,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
             "debt": None, "equity": None, "cur_assets": None, "cur_liab": None, "shares": None
         }
 
-        # 1. 네이버 모바일 API
         headers_m = {
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15",
             "Referer": f"https://m.stock.naver.com/domestic/stock/{code}/total"
@@ -145,7 +144,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     except Exception: pass
         except Exception: pass
 
-        # 2. yfinance 재무제표 보강
         try:
             for sfx in [".KS", ".KQ"]:
                 stk = yf.Ticker(f"{code}{sfx}")
@@ -158,7 +156,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     if data["bps"] is None and inf.get("bookValue"): data["bps"] = float(inf["bookValue"])
                     if data["div_yield"] is None and inf.get("dividendYield"): data["div_yield"] = round(float(inf["dividendYield"]) * 100, 2)
 
-                # 손익계산서
                 fin = stk.financials
                 if fin is not None and not fin.empty:
                     c0 = fin.columns[0]
@@ -168,7 +165,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     if data["rev"] and data["op_inc"]: data["op_margin"] = round((data["op_inc"] / data["rev"]) * 100, 1)
                     if data["rev"] and data["net_inc"]: data["net_margin"] = round((data["net_inc"] / data["rev"]) * 100, 1)
 
-                # 재무상태표
                 bs = stk.balance_sheet
                 if bs is not None and not bs.empty:
                     b0 = bs.columns[0]
@@ -184,7 +180,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     break
         except Exception: pass
 
-        # 3. 마스터 DB 백업 (미수집 항목 채우기)
         if code in MASTER_FINANCIAL_DB:
             fb = MASTER_FINANCIAL_DB[code]
             if data["rev"] is None: data["rev"] = fb["rev"]
@@ -200,7 +195,6 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
             if data["curr_ratio"] is None: data["curr_ratio"] = fb["curr_r"]
             if data["roe"] is None: data["roe"] = fb["roe"]
 
-        # 4. 수학적 역산 보정 (어떤 종목이든 N/A 방지)
         if data["shares"] and data["eps"] and data["net_inc"] is None:
             data["net_inc"] = data["shares"] * data["eps"]
         if data["shares"] and data["bps"] and data["equity"] is None:
@@ -285,7 +279,9 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
 
                 t1, t2, t3 = st.tabs(["💰 1. 가치평가 지표 (일드갭)", "📈 2. 수익성 지표", "🛡️ 3. 재무건전성 지표"])
 
-                # TAB 1: 가치평가
+                # ==========================================
+                # TAB 1: 가치평가 지표
+                # ==========================================
                 with t1:
                     st.markdown("#### 기업 가치 대비 주가 수준 (Valuation)")
                     v1, v2, v3, v4 = st.columns(4)
@@ -319,20 +315,32 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                         delta_color="off"
                     )
 
-                    # 기본 수치 요약표
-                    st.markdown("##### 📋 가치평가 기본 수치 요약")
-                    val_summary_df = pd.DataFrame({
-                        "구분": ["현재 주가", "주당순이익 (EPS)", "주당순자산 (BPS)", "주당배당금 (DPS)"],
-                        "기본 수치": [f"{d['price']:,.0f}원", eps_txt, bps_txt, dps_txt],
-                        "연계 밸류에이션": ["기준 주가", f"PER {d['per']:.1f}배" if d['per'] else "-", f"PBR {d['pbr']:.2f}배" if d['pbr'] else "-", f"배당수익률 {d['div_yield']:.2f}%" if d['div_yield'] else "-"]
-                    })
-                    st.dataframe(val_summary_df, hide_index=True, use_container_width=True)
+                    # 가치평가 종합 상태 판정 박스
+                    st.markdown("##### 🧭 가치평가 핵심 판정 결과")
+                    val_evals = []
+                    if d['per']:
+                        if d['per'] <= 15: val_evals.append("🟢 **PER 저평가 통과**: 주가수익비율이 15배 이하로 벌어들이는 순이익 대비 주가가 저평가되어 있습니다.")
+                        elif d['per'] <= 25: val_evals.append("🟡 **PER 적정/성장 반영**: 15~25배 수준으로 시장 평균 수준이거나 미래 성장 기대감이 주가에 반영되어 있습니다.")
+                        else: val_evals.append("🔴 **PER 고평가 부담**: 25배를 초과하여 향후 실적 급증이 뒷받침되지 않으면 주가 조정 압력이 커질 수 있습니다.")
+                    else:
+                        val_evals.append("🔴 **당기순손실 적자**: 최근 결산 기준 적자 기업으로 정상적인 PER 배수를 산정할 수 없습니다.")
 
+                    if d['pbr']:
+                        if d['pbr'] <= 1.0: val_evals.append("🟢 **PBR 청산가치 이하**: 주가가 주당 순자산(장부가치)보다 낮아 자산 관점에서 강한 하방 안전마진을 확보했습니다.")
+                        else: val_evals.append(f"ℹ️ **PBR {d['pbr']:.2f}배**: 순자산 가치 대비 프리미엄을 받고 거래 중입니다.")
+
+                    if d['div_yield'] and d['div_yield'] >= 3.0:
+                        val_evals.append(f"🟢 **고배당 안전마진**: 배당수익률이 {d['div_yield']:.2f}%로 시중 금리 수준의 현금 배당 방어력을 갖췄습니다.")
+
+                    for msg in val_evals:
+                        st.write(msg)
+
+                    # 일드갭 진단
                     base_per = d['cns_per'] or d['per']
                     if base_per and base_per > 0:
                         exp_ret = (1 / base_per) * 100
                         yield_gap = exp_ret - deposit_rate
-                        st.markdown("##### 📌 벤저민 그레이엄 일드갭 진단")
+                        st.markdown("##### 📌 벤저민 그레이엄 일드갭(초과수익률) 진단")
                         yc1, yc2, yc3 = st.columns(3)
                         yc1.metric("주식 기대수익률 (1/PER)", f"{exp_ret:.2f}%", delta=f"적용 PER {base_per:.1f}배", delta_color="off")
                         yc2.metric("기준 예금 이자율", f"{deposit_rate:.2f}%", delta="무위험 금리", delta_color="off")
@@ -341,9 +349,27 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                         elif yield_gap >= 2.0: st.info("🔵 **유리 (비중 확대)**: 예금보다 2~4%p 높은 수익률이 기대되는 안정적 구간입니다.")
                         elif yield_gap >= 1.0: st.warning("🟡 **다소 유리 (선별 투자)**: 예금 대비 1~2%p 초과수익 구간입니다.")
                         elif yield_gap >= 0.0: st.warning("🟠 **메리트 없음**: 예금·채권 병행이 유리합니다.")
-                        else: st.error("🔴 **매우 불리**: 주식 기대수익률이 무위험 예금 금리보다 낮습니다.")
+                        else: st.error("🔴 **매우 불리 (예금 보유 유리)**: 주식 기대수익률이 무위험 예금 금리보다 낮습니다.")
 
-                # TAB 2: 수익성
+                    # 기본 수치 요약표
+                    st.markdown("##### 📋 가치평가 기본 산출 수치")
+                    val_summary_df = pd.DataFrame({
+                        "구분": ["현재 주가", "주당순이익 (EPS)", "주당순자산 (BPS)", "주당배당금 (DPS)"],
+                        "기본 수치": [f"{d['price']:,.0f}원", eps_txt, bps_txt, dps_txt],
+                        "연계 밸류에이션": ["기준 주가", f"PER {d['per']:.1f}배" if d['per'] else "-", f"PBR {d['pbr']:.2f}배" if d['pbr'] else "-", f"배당수익률 {d['div_yield']:.2f}%" if d['div_yield'] else "-"]
+                    })
+                    st.dataframe(val_summary_df, hide_index=True, use_container_width=True)
+
+                    with st.expander("📖 가치평가 지표 판단 가이드"):
+                        st.markdown("""
+                        * **PER (주가수익비율)**: $\\text{주가} \\div \\text{EPS}$. **10~15배 이하**이면 벌어들이는 순이익 대비 주가가 저평가된 것으로 판단합니다.
+                        * **PBR (주가순자산비율)**: $\\text{주가} \\div \\text{BPS}$. **1.0배 미만**이면 기업이 부도나서 자산을 처분해도 주가보다 많다는 뜻으로 자산주 저평가 기준입니다.
+                        * **일드갭 (Yield Gap)**: $\\frac{1}{\\text{PER}} - \\text{예금금리}$. 안전자산 대신 주식이라는 위험자산에 투자했을 때 얻는 '초과수익 보상'입니다.
+                        """)
+
+                # ==========================================
+                # TAB 2: 수익성 지표
+                # ==========================================
                 with t2:
                     st.markdown("#### 돈을 버는 효율성과 마진율 (Profitability)")
                     p1, p2, p3 = st.columns(3)
@@ -372,6 +398,23 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                         delta_color="off"
                     )
 
+                    # 수익성 종합 상태 판정 박스
+                    st.markdown("##### 🧭 수익성 핵심 판정 결과")
+                    if d['roe'] is not None and d['roe'] >= 10:
+                        st.success(f"🟢 **ROE 우수 ({d['roe']:.1f}%)**: 워런 버핏의 경제적 해자 기준(연 10% 이상)을 통과했습니다. 주주의 자본을 복리로 불리는 효율이 매우 뛰어납니다.")
+                    elif d['roe'] is not None and d['roe'] > 0:
+                        st.info(f"🟡 **ROE 보통 ({d['roe']:.1f}%)**: 시중 금리 수준은 상회하나 자기자본 대비 복리 성장 탄력이 완만한 편입니다.")
+                    else:
+                        st.error(f"🔴 **ROE 부진/적자**: 최근 당기순손실이 발생했거나 자기자본 대비 이익 창출력이 미흡합니다.")
+
+                    if d['op_margin'] is not None and d['op_margin'] >= 10:
+                        st.success(f"🟢 **두 자릿수 영업이익률 ({d['op_margin']:.1f}%)**: 매출 100원 중 10원 이상을 순수 본업으로 남기고 있어 강력한 원가 경쟁력과 가격 결정력을 입증하고 있습니다.")
+                    elif d['op_margin'] is not None and d['op_margin'] > 0:
+                        st.info(f"🟡 **영업이익률 보통 ({d['op_margin']:.1f}%)**: 일반 제조업 평균 수준의 본업 마진율입니다.")
+                    else:
+                        st.warning(f"🔴 **영업마진 경고**: 원가 부담이나 판관비 급증으로 본업 마진 방어가 취약한 상태입니다.")
+
+                    # 기본 손익 수치 요약표
                     st.markdown("##### 📋 수익성 기본 손익 수치 요약")
                     prof_df = pd.DataFrame({
                         "항목": ["연간 매출액", "연간 영업이익", "연간 당기순이익", "자기자본 (자본총계)"],
@@ -385,7 +428,16 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     })
                     st.dataframe(prof_df, hide_index=True, use_container_width=True)
 
-                # TAB 3: 재무건전성
+                    with st.expander("📖 수익성 지표 판단 가이드"):
+                        st.markdown("""
+                        * **ROE (자기자본이익률)**: $\\text{당기순이익} \\div \\text{자기자본} \\times 100$. 주주가 맡긴 돈으로 1년간 몇 %를 벌었는가? **10% 이상이면 우량**, 15% 이상이면 특급 기업입니다.
+                        * **영업이익률**: $\\text{영업이익} \\div \\text{매출액} \\times 100$. 원자재값 폭등이나 고환율에도 가격을 올려 마진을 지킬 수 있는 '경제적 해자'가 있는지 보여줍니다.
+                        * **당기순이익률**: 영업이익에서 이자비용, 세금을 다 떼고 최종 주주 몫으로 떨어진 진짜 마진율입니다.
+                        """)
+
+                # ==========================================
+                # TAB 3: 재무건전성 지표
+                # ==========================================
                 with t3:
                     st.markdown("#### 재무적 생존 체력과 부도 위험 (Stability)")
                     s1, s2 = st.columns(2)
@@ -408,6 +460,23 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                         delta_color="off"
                     )
 
+                    # 재무건전성 종합 상태 판정 박스
+                    st.markdown("##### 🧭 재무건전성 핵심 판정 결과")
+                    if d['debt_ratio'] is not None and d['debt_ratio'] <= 100:
+                        st.success(f"🟢 **부채비율 안정권 ({d['debt_ratio']:.1f}%)**: 자기자본보다 부채가 적어 고금리 국면이나 불황기에도 이자 부담 및 부도 위험이 극히 낮습니다.")
+                    elif d['debt_ratio'] is not None and d['debt_ratio'] <= 200:
+                        st.info(f"🟡 **부채비율 적정 ({d['debt_ratio']:.1f}%)**: 통상적인 기업 활동 수준의 부채이나, 영업이익으로 이자를 감당할 수 있는지 이자보상배율을 점검해야 합니다.")
+                    else:
+                        st.error(f"🔴 **부채비율 주의 ({d['debt_ratio']:.1f}%)**: 부채가 자본의 2배를 초과하여 금리 상승기 금융비용 지출이 급증할 수 있습니다.")
+
+                    if d['curr_ratio'] is not None and d['curr_ratio'] >= 150:
+                        st.success(f"🟢 **단기 유동성 우량 ({d['curr_ratio']:.1f}%)**: 1년 안에 갚아야 할 단기 부채보다 즉시 현금화할 수 있는 유동자산이 1.5배 이상 많아 단기 자금 경색 위험이 없습니다.")
+                    elif d['curr_ratio'] is not None and d['curr_ratio'] >= 100:
+                        st.info(f"🟡 **단기 유동성 양호 ({d['curr_ratio']:.1f}%)**: 유동자산이 단기 부채를 상회하여 일상적인 결제 방어가 가능합니다.")
+                    else:
+                        st.warning(f"🔴 **유동비율 경고 ({d['curr_ratio']:.1f}%)**: 단기 부채가 유동자산보다 많아 유동성 위험 관리가 필요합니다.")
+
+                    # 기본 대차대조표 수치 요약표
                     st.markdown("##### 📋 재무건전성 기본 대차대조표 수치 요약")
                     stab_df = pd.DataFrame({
                         "재무제표 항목": ["부채총계", "자본총계 (자기자본)", "유동자산", "유동부채"],
@@ -421,6 +490,12 @@ if app_mode == "🏢 종목별 재무·일드갭 진단":
                     })
                     st.dataframe(stab_df, hide_index=True, use_container_width=True)
 
+                    with st.expander("📖 재무건전성 지표 판단 가이드"):
+                        st.markdown("""
+                        * **부채비율**: $\\text{부채총계} \\div \\text{자기자본} \\times 100$. **100% 이하가 가장 이상적**이며, 200%를 넘어가면 경기 침체기에 신용 리스크가 부각됩니다.
+                        * **유동비율**: $\\text{유동자산} \\div \\text{유동부채} \\times 100$. 1년 내 현금화할 수 있는 돈으로 1년 내 갚아야 할 빚을 갚을 수 있는가? **150% 이상이면 매우 안전**합니다.
+                        """)
+
 # =========================================================================
 # 모드 2: 한·미 주요 경제지표 대시보드
 # =========================================================================
@@ -428,7 +503,6 @@ else:
     st.title("🌍 한·미 주요 경제지표 대시보드")
     st.caption("글로벌 거시경제 핵심 지표(물가·성장률·기준금리차·환율·금리·원자재·공포지수) 종합 진단")
 
-    # 1. 물가 & 성장률
     st.markdown("### 📊 핵심 인플레이션 & 경제 성장률 (한·미 비교)")
     st.caption("연준(Fed)과 한국은행(BOK) 통화정책의 핵심 잣대가 되는 4대 거시 펀더멘털 지표")
 
